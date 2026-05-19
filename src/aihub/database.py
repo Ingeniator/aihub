@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
+from prometheus_client.core import GaugeMetricFamily
 from sqlalchemy import Column, DateTime, Float, Index, Integer, JSON, String, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -42,7 +43,10 @@ class ChatHistoryRow(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
     author_id = Column(String, nullable=False)
 
-    __table_args__ = (Index("ix_chat_history_project_id", "project_id"),)
+    __table_args__ = (
+        Index("ix_chat_history_project_id", "project_id"),
+        Index("ix_chat_history_author_id", "author_id"),
+    )
 
 
 _engine = None
@@ -80,3 +84,46 @@ async def check_db() -> bool:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with _session_factory() as session:
         yield session
+
+
+class PoolStatsCollector:
+    """Reads live connection pool state on every scrape.
+
+    Implemented as a pull-based Collector rather than push Gauges because pool
+    state is instantaneous — there is no event to hook into that reliably tracks
+    every transition (connect, checkout, checkin, invalidate, recycle).
+    """
+
+    def describe(self):
+        return []  # suppress pre-registration; metrics appear only when engine is live
+
+    def collect(self):
+        if _engine is None:
+            return
+        try:
+            p = _engine.pool
+            yield GaugeMetricFamily(
+                "aihub_db_pool_size",
+                "Configured connection pool size",
+                value=p.size(),
+            )
+            yield GaugeMetricFamily(
+                "aihub_db_pool_checked_in",
+                "Idle connections currently sitting in the pool",
+                value=p.checkedin(),
+            )
+            yield GaugeMetricFamily(
+                "aihub_db_pool_checked_out",
+                "Connections currently checked out and in use",
+                value=p.checkedout(),
+            )
+            yield GaugeMetricFamily(
+                "aihub_db_pool_overflow",
+                "Overflow connections open beyond pool_size",
+                value=p.overflow(),
+            )
+        except Exception:
+            return
+
+
+pool_stats_collector = PoolStatsCollector()

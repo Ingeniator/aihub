@@ -85,6 +85,7 @@ class LeaderboardCreate(BaseModel):
 class LeaderboardUpdate(BaseModel):
     preset: PresetLeaderboard
     rating: float
+    peak: float
     matches: int
     wins: int
     losses: int
@@ -125,6 +126,19 @@ class ChatHistoryPage(BaseModel):
     page: int
     size: int
     total: int
+    total_pages: int
+
+
+class Project(BaseModel):
+    id: str
+
+
+class ProjectPage(BaseModel):
+    items: list[Project]
+    page: int
+    size: int
+    total: int
+    total_pages: int
 
 
 class ChatHistoryCreate(BaseModel):

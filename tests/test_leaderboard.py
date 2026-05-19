@@ -27,6 +27,7 @@ _CREATE = {
 _UPDATE = {
     "preset": _PRESET,
     "rating": 1620.0,
+    "peak": 1650.0,
     "matches": 12,
     "wins": 9,
     "losses": 2,
@@ -126,9 +127,9 @@ async def test_update(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["rating"] == 1620.0
+    assert data["peak"] == 1650.0
     assert data["matches"] == 12
     assert data["wins"] == 9
-    assert data["peak"] == 1600.0  # peak unchanged by update
 
 
 async def test_update_not_found(client: AsyncClient):

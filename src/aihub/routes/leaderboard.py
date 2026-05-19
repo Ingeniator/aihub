@@ -134,6 +134,7 @@ async def update_leaderboard(
                 raise HTTPException(status_code=404, detail="Not found")
             row.preset = body.preset.model_dump()
             row.rating = body.rating
+            row.peak = body.peak
             row.matches = body.matches
             row.wins = body.wins
             row.losses = body.losses

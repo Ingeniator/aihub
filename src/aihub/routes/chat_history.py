@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import math
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -38,12 +40,21 @@ async def list_chat_history(
     project_id: str,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
+    author_id: Optional[str] = None,
+    created_after: Optional[datetime] = None,
+    created_before: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
 ) -> ChatHistoryPage:
     op = "ch_list"
     try:
         with DB_QUERY_SECONDS.labels(operation=op).time():
             stmt = select(ChatHistoryRow).where(ChatHistoryRow.project_id == project_id)
+            if author_id is not None:
+                stmt = stmt.where(ChatHistoryRow.author_id == author_id)
+            if created_after is not None:
+                stmt = stmt.where(ChatHistoryRow.created_at >= created_after)
+            if created_before is not None:
+                stmt = stmt.where(ChatHistoryRow.created_at <= created_before)
             total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
             rows = await db.execute(
                 stmt.order_by(ChatHistoryRow.created_at.desc()).offset((page - 1) * size).limit(size)
@@ -52,7 +63,13 @@ async def list_chat_history(
     except Exception:
         DB_ERRORS_TOTAL.labels(operation=op).inc()
         raise
-    return ChatHistoryPage(items=items, page=page, size=size, total=total)
+    return ChatHistoryPage(
+        items=items,
+        page=page,
+        size=size,
+        total=total,
+        total_pages=math.ceil(total / size) if total else 0,
+    )
 
 
 @router.post("/projects/{project_id}/arena/history", response_model=ChatHistory, status_code=201)

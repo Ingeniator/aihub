@@ -35,6 +35,7 @@ async def test_list_empty(client: AsyncClient):
     data = resp.json()
     assert data["items"] == []
     assert data["total"] == 0
+    assert data["total_pages"] == 0
     assert data["page"] == 1
 
 
@@ -65,6 +66,7 @@ async def test_list_populated(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 2
+    assert data["total_pages"] == 1
     assert len(data["items"]) == 2
 
 
@@ -75,6 +77,7 @@ async def test_list_pagination(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 3
+    assert data["total_pages"] == 2
     assert len(data["items"]) == 2
 
     resp2 = await client.get(f"/projects/{PROJECT}/arena/history", params={"page": 2, "size": 2})
@@ -147,3 +150,77 @@ async def test_delete_not_found(client: AsyncClient):
         f"/projects/{PROJECT}/arena/history/00000000-0000-0000-0000-000000000000"
     )
     assert resp.status_code == 404
+
+
+async def test_list_filter_author_id_match(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    await client.post(f"/projects/{PROJECT}/arena/history", json={**_CREATE, "author_id": "other-user"})
+    resp = await client.get(f"/projects/{PROJECT}/arena/history", params={"author_id": "user-42"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["author_id"] == "user-42"
+
+
+async def test_list_filter_author_id_no_match(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    resp = await client.get(f"/projects/{PROJECT}/arena/history", params={"author_id": "nobody"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
+async def test_list_filter_created_after_past(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    resp = await client.get(
+        f"/projects/{PROJECT}/arena/history",
+        params={"created_after": "2000-01-01T00:00:00Z"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+
+async def test_list_filter_created_after_future(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    resp = await client.get(
+        f"/projects/{PROJECT}/arena/history",
+        params={"created_after": "2099-01-01T00:00:00Z"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
+async def test_list_filter_created_before_future(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    resp = await client.get(
+        f"/projects/{PROJECT}/arena/history",
+        params={"created_before": "2099-01-01T00:00:00Z"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+
+async def test_list_filter_created_before_past(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    resp = await client.get(
+        f"/projects/{PROJECT}/arena/history",
+        params={"created_before": "2000-01-01T00:00:00Z"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
+async def test_list_filter_combined(client: AsyncClient):
+    await client.post(f"/projects/{PROJECT}/arena/history", json=_CREATE)
+    await client.post(f"/projects/{PROJECT}/arena/history", json={**_CREATE, "author_id": "other-user"})
+    resp = await client.get(
+        f"/projects/{PROJECT}/arena/history",
+        params={
+            "author_id": "user-42",
+            "created_after": "2000-01-01T00:00:00Z",
+            "created_before": "2099-01-01T00:00:00Z",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["author_id"] == "user-42"

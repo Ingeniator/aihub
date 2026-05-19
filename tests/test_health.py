@@ -31,5 +31,5 @@ async def test_metrics(client: AsyncClient):
     body = resp.text
     assert "aihub_db_query_seconds" in body
     assert "aihub_db_errors_total" in body
-    assert "http_request_duration" in body
+    assert "http_request_duration_seconds" in body
     assert "http_requests_total" in body

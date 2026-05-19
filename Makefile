@@ -45,6 +45,22 @@ down-v:  ## Stop and remove containers + volumes
 test-docker:  ## Run tests in an isolated Docker container
 	$(COMPOSE) --profile test run --rm test
 
+.PHONY: seed
+seed:  ## Seed local database with sample data
+	uv run python scripts/seed.py
+
+.PHONY: seed-reset
+seed-reset:  ## Truncate and re-seed local database
+	uv run python scripts/seed.py --reset
+
+.PHONY: seed-docker
+seed-docker:  ## Re-run seeder via Docker (skips existing data)
+	$(COMPOSE) run --rm seed
+
+.PHONY: seed-docker-reset
+seed-docker-reset:  ## Truncate and re-seed via Docker
+	$(COMPOSE) run --rm seed --reset
+
 .PHONY: logs
 logs:  ## Follow aihub logs
 	$(COMPOSE) logs -f aihub

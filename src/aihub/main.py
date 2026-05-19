@@ -13,10 +13,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response as StarletteResponse
 
 from aihub.config import get_settings
-from aihub.database import check_db, create_tables, init_db
+from aihub.database import check_db, create_tables, init_db, pool_stats_collector
 from aihub.logging_config import setup_logging
 from aihub.routes.chat_history import router as chat_history_router
 from aihub.routes.leaderboard import router as leaderboard_router
+from aihub.routes.projects import router as projects_router
 
 settings = get_settings()
 
@@ -49,6 +50,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RequestIDMiddleware)
 
+app.include_router(projects_router)
 app.include_router(leaderboard_router)
 app.include_router(chat_history_router)
 
@@ -77,7 +79,15 @@ async def metrics():
         multiprocess.MultiProcessCollector(registry)
     else:
         registry = REGISTRY
-    return StarletteResponse(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+    output = generate_latest(registry)
+
+    # Pool stats are live point-in-time reads — they never go through the
+    # multiprocess .db files, so they must always be appended separately.
+    pool_registry = CollectorRegistry()
+    pool_registry.register(pool_stats_collector)
+    output += generate_latest(pool_registry)
+
+    return StarletteResponse(content=output, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/livez")
