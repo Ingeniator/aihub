@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: aihub
+      POSTGRES_USER: aihub
+      POSTGRES_PASSWORD: aihub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aihub -d aihub"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+
+  aihub:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./config.docker.yaml:/app/config.yaml:ro
+    networks:
+      - app
+
+  # Isolated test runner — shares no network with the app stack.
+  # Tests use SQLite in-memory so no real Postgres is needed.
+  # Run with: docker compose --profile test run --rm test
+  test:
+    build:
+      context: .
+      target: test
+    networks:
+      - test
+    profiles:
+      - test
+
+volumes:
+  postgres-data:
+
+networks:
+  app:
+  test:

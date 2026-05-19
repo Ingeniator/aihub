@@ -7,86 +7,48 @@ RESET := \033[0m
 
 .PHONY: help
 help:  ## Show available commands
-	@echo "$(CYAN)Available commands:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "$(CYAN)%-15s$(RESET) %s\n", $$1, $$2}'
 
-## ---------- Init ----------
+## ---------- Development ----------
 
-YALLMP_REPO := git@github.com:Ingeniator/yallmp.git
-CHECKR_REPO := git@github.com:Ingeniator/checkr.git
-LLOGR_REPO  := git@github.com:Ingeniator/llogr.git
+.PHONY: dev
+dev:  ## Run dev server with auto-reload (local)
+	uv run uvicorn aihub.main:app --reload --port 5000
 
-.PHONY: init
-init:  ## Clone sub-projects (skip if already present)
-	@[ -d yallmp ] || git clone $(YALLMP_REPO) yallmp
-	@[ -d checkr ] || git clone $(CHECKR_REPO) checkr
-	@[ -d llogr ]  || git clone $(LLOGR_REPO) llogr
-	@echo "$(CYAN)All projects ready.$(RESET)"
+.PHONY: test
+test:  ## Run tests locally
+	uv run pytest tests/ -v
 
-## ---------- Docker Compose ----------
+.PHONY: lint
+lint:  ## Lint source and tests
+	uv run ruff check src/ tests/
+
+## ---------- Docker ----------
+
+.PHONY: build
+build:  ## Build all Docker images
+	$(COMPOSE) build
 
 .PHONY: up
-up:  ## Start all services
+up:  ## Start postgres + aihub
 	$(COMPOSE) up -d --build
 
 .PHONY: down
-down:  ## Stop and remove all services
+down:  ## Stop and remove containers
 	$(COMPOSE) down
 
 .PHONY: down-v
-down-v:  ## Stop and remove all services including volumes
+down-v:  ## Stop and remove containers + volumes
 	$(COMPOSE) down -v
 
-.PHONY: restart
-restart:  ## Restart all services
-	$(COMPOSE) restart
+.PHONY: test-docker
+test-docker:  ## Run tests in an isolated Docker container
+	$(COMPOSE) --profile test run --rm test
 
 .PHONY: logs
-logs:  ## Show logs for all services (follow)
-	$(COMPOSE) logs -f
+logs:  ## Follow aihub logs
+	$(COMPOSE) logs -f aihub
 
 .PHONY: ps
 ps:  ## Show running services
 	$(COMPOSE) ps
-
-## ---------- Individual services ----------
-
-.PHONY: up-yallmp
-up-yallmp:  ## Start yallmp only
-	$(COMPOSE) up -d --build yallmp
-
-.PHONY: up-checkr
-up-checkr:  ## Start checkr only
-	$(COMPOSE) up -d --build checkr
-
-.PHONY: up-llogr
-up-llogr:  ## Start llogr with minio
-	$(COMPOSE) up -d --build minio createbucket llogr
-
-.PHONY: up-minio
-up-minio:  ## Start minio only
-	$(COMPOSE) up -d minio createbucket
-
-.PHONY: up-gateway
-up-gateway:  ## Start nginx gateway only
-	$(COMPOSE) up -d gateway
-
-## ---------- Logs ----------
-
-.PHONY: logs-yallmp
-logs-yallmp:  ## Show yallmp logs
-	$(COMPOSE) logs -f yallmp
-
-.PHONY: logs-checkr
-logs-checkr:  ## Show checkr logs
-	$(COMPOSE) logs -f checkr
-
-.PHONY: logs-llogr
-logs-llogr:  ## Show llogr logs
-	$(COMPOSE) logs -f llogr
-
-## ---------- Build ----------
-
-.PHONY: build
-build:  ## Build all images without starting
-	$(COMPOSE) build

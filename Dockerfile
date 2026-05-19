@@ -9,7 +9,15 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ src/
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.13-slim
+# ---- test stage: adds dev deps + tests on top of builder ----
+FROM builder AS test
+RUN uv sync --frozen --no-editable
+COPY tests/ tests/
+COPY config.yaml .
+CMD ["uv", "run", "pytest", "tests/", "-v", "--tb=short"]
+
+# ---- runtime stage ----
+FROM python:3.13-slim AS runtime
 
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
