@@ -75,6 +75,8 @@ class PostgresConfig:
     password: str   # mapped from 'pass' in yaml (reserved keyword)
     pool: PoolConfig = PoolConfig()
     target_session_attrs: str = "read-write"
+    schema: str = "public"
+    ssl_mode: str = "prefer"
 
     def _parsed_hosts(self) -> tuple[list[str], list[int]]:
         raw = self.uri if "://" in self.uri else f"postgresql://{self.uri}"
@@ -100,7 +102,11 @@ class PostgresConfig:
 
     def connect_args(self) -> dict:
         hosts, ports = self._parsed_hosts()
-        args: dict = {"target_session_attrs": self.target_session_attrs}
+        args: dict = {
+            "target_session_attrs": self.target_session_attrs,
+            "server_settings": {"search_path": self.schema},
+            "ssl": self.ssl_mode,
+        }
         if len(hosts) == 1:
             return {**args, "host": hosts[0], "port": ports[0]}
         return {**args, "host": hosts, "port": ports}
@@ -136,7 +142,9 @@ def load_config(path: str | Path) -> Settings:
             user=pg["user"],
             password=pg["pass"],
             pool=PoolConfig(**pg.get("pool", {})),
-            target_session_attrs=pg.get("target_session_attrs", "any"),
+            target_session_attrs=pg.get("target_session_attrs", "read-write"),
+            schema=pg.get("schema", "public"),
+            ssl_mode=pg.get("ssl_mode", "prefer"),
         ),
         server=ServerConfig(**raw.get("server", {})),
     )

@@ -12,6 +12,8 @@ postgres:
   user: "aihub"
   pass: "vault:POSTGRES_PASSWORD"
   target_session_attrs: "read-write"  # only connect to the primary
+  schema: "public"
+  ssl_mode: "prefer"  # disable | prefer | require | verify-ca | verify-full
   pool:
     size: 5
     max_overflow: 10
