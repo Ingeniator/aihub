@@ -1,0 +1,282 @@
+openapi: "3.0.3"
+info:
+  title: Leaderboard CRUD API
+  version: "1.0.0"
+  description: >
+    Manage project-specific leaderboard entries that track ELO ratings for AI model presets.
+    Each leaderboard row is uniquely identified by the pair `(project_id, preset.uid)`.
+servers:
+  - url: https://api.example.com/v1
+
+paths:
+  /projects/{project_id}/leaderboard:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Unique project identifier
+
+    get:
+      summary: List leaderboard entries for a project
+      description: Returns a paginated list of leaderboard entries, optionally filtered by privacy.
+      parameters:
+        - name: privacy
+          in: query
+          schema:
+            $ref: "#/components/schemas/LeaderboardPrivacy"
+          description: Filter by privacy setting
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - page
+                  - size
+                  - total
+                  - total_pages
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Leaderboard"
+                  page:
+                    type: integer
+                  size:
+                    type: integer
+                  total:
+                    type: integer
+
+    post:
+      summary: Create a new leaderboard entry
+      description: >
+        Creates a new leaderboard row. The server validates the uniqueness
+        of `(project_id, preset.uid)`. The `preset.uid` is used as the sub‑resource ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaderboardCreate"
+      responses:
+        "201":
+          description: Leaderboard entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leaderboard"
+
+  /projects/{project_id}/leaderboard/{preset_uid}:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Unique project identifier
+      - name: preset_uid
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The `uid` of the preset (inside the leaderboard entry)
+
+    get:
+      summary: Get a single leaderboard entry
+      responses:
+        "200":
+          description: The requested leaderboard entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leaderboard"
+
+    patch:
+      summary: Partially update a leaderboard entry
+      description: >
+        Updates mutable fields: the preset details (including prices) and all
+        rating/stats fields.
+        To change privacy, delete and re‑create the entry (or use a dedicated endpoint).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaderboardUpdate"
+      responses:
+        "200":
+          description: Updated leaderboard entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leaderboard"
+
+    delete:
+      summary: Delete a leaderboard entry
+      responses:
+        "204":
+          description: Successfully deleted
+
+components:
+  schemas:
+    # ---- Primitives ----
+    PresetPrice:
+      type: object
+      required: [value, currency]
+      properties:
+        value:
+          type: number
+          description: Price amount
+        currency:
+          type: string
+          description: ISO 4217 currency code (e.g., "USD")
+
+    Preset:
+      type: object
+      required: [uid, model]
+      properties:
+        uid:
+          type: string
+        model:
+          type: string
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+        top_p:
+          type: number
+          minimum: 0
+          maximum: 1
+        max_tokens:
+          type: integer
+          minimum: 1
+        prompt:
+          type: string
+
+    PresetLeaderboard:
+      allOf:
+        - $ref: "#/components/schemas/Preset"
+        - type: object
+          required: [input_price, output_price]
+          properties:
+            input_price:
+              $ref: "#/components/schemas/PresetPrice"
+            output_price:
+              $ref: "#/components/schemas/PresetPrice"
+
+    LeaderboardPrivacy:
+      type: string
+      enum: [private, public]
+
+    # ---- Main resource ----
+    Leaderboard:
+      type: object
+      required:
+        - project_id
+        - preset
+        - rating
+        - peak
+        - matches
+        - wins
+        - losses
+        - ties
+        - updated_at
+        - privacy
+      properties:
+        project_id:
+          type: string
+          description: The project this entry belongs to
+        preset:
+          $ref: "#/components/schemas/PresetLeaderboard"
+        rating:
+          type: number
+          description: Current ELO rating
+        peak:
+          type: number
+          description: Highest ELO rating ever achieved
+        matches:
+          type: integer
+          description: Total rated matches
+        wins:
+          type: integer
+        losses:
+          type: integer
+        ties:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO timestamp of the last rated match
+        privacy:
+          $ref: "#/components/schemas/LeaderboardPrivacy"
+
+    # ---- Input DTOs ----
+    LeaderboardCreate:
+      type: object
+      required:
+        - privacy
+        - preset
+        - rating
+        - peak
+        - matches
+        - wins
+        - losses
+        - ties
+      properties:
+        privacy:
+          $ref: "#/components/schemas/LeaderboardPrivacy"
+        preset:
+          $ref: "#/components/schemas/PresetLeaderboard"
+        rating:
+          type: number
+        peak:
+          type: number
+        matches:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        ties:
+          type: integer
+
+    LeaderboardUpdate:
+      description: >
+        Fields allowed for update.
+      type: object
+      required:
+        - preset
+        - rating
+        - matches
+        - wins
+        - losses
+        - ties
+      properties:
+        preset:
+          $ref: "#/components/schemas/PresetLeaderboard"
+        rating:
+          type: number
+        matches:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        ties:
+          type: integer

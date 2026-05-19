@@ -1,0 +1,275 @@
+openapi: "3.0.3"
+info:
+  title: ChatHistory CRUD API (Project-scoped)
+  version: "1.0.0"
+  description: >
+    REST API to manage chat history records (LLM comparison results) within a specific project.
+    All endpoints are scoped to `/projects/{project_id}/arena/history`.
+servers:
+  - url: https://api.example.com/v1
+
+paths:
+  /projects/{project_id}/arena/history:
+    parameters:
+      - $ref: "#/components/parameters/project_id"
+
+    get:
+      summary: List chat histories
+      description: >
+        Returns a paginated list of chat histories for the given project.
+        Optionally filter by author or other attributes (future).
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: A paginated array of chat histories
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                  - page
+                  - size
+                  - total
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatHistory"
+                  page:
+                    type: integer
+                    description: Current page number
+                  size:
+                    type: integer
+                    description: Number of items per page
+                  total:
+                    type: integer
+                    description: Total number of items matching the filters
+
+    post:
+      summary: Create a new chat history
+      description: >
+        Creates a new record. The server generates `uid` and `created_at`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatHistoryCreate"
+      responses:
+        "201":
+          description: Chat history created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatHistory"
+
+  /projects/{project_id}/arena/history/{uid}:
+    parameters:
+      - $ref: "#/components/parameters/project_id"
+      - name: uid
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Unique identifier of the chat history
+
+    get:
+      summary: Get a single chat history
+      responses:
+        "200":
+          description: The requested chat history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatHistory"
+
+    patch:
+      summary: Partially update a chat history
+      description: >
+        Updates only the mutable fields: presets, messages, and winner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatHistoryUpdate"
+      responses:
+        "200":
+          description: Updated chat history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatHistory"
+
+    delete:
+      summary: Delete a chat history
+      responses:
+        "204":
+          description: Successfully deleted, no content returned
+
+components:
+  parameters:
+    project_id:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The unique identifier of the project
+
+  schemas:
+    # ---- Enums ----
+    Status:
+      type: string
+      enum: [win, lose, tie]
+
+    Winner:
+      type: string
+      enum: [primary, tie, secondary, neither]
+
+    Role:
+      type: string
+      enum: [user, assistant]
+
+    # ---- Sub-documents ----
+    ChatMessage:
+      type: object
+      required: [content, role]
+      properties:
+        content:
+          type: string
+          description: The text content of the message
+        role:
+          $ref: "#/components/schemas/Role"
+        status:
+          $ref: "#/components/schemas/Status"
+
+    PresetSample:
+      type: object
+      required: [uid, model]
+      properties:
+        uid:
+          type: string
+        model:
+          type: string
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+        top_p:
+          type: number
+          minimum: 0
+          maximum: 1
+        max_tokens:
+          type: integer
+          minimum: 1
+        prompt:
+          type: string
+
+    # ---- Main resource ----
+    ChatHistory:
+      type: object
+      required:
+        - uid
+        - project_id
+        - primary_preset
+        - secondary_preset
+        - primary_messages
+        - secondary_messages
+        - winner
+        - created_at
+        - author_id
+      properties:
+        uid:
+          type: string
+          readOnly: true
+          description: Server-assigned unique ID
+        project_id:
+          type: string
+        primary_preset:
+          $ref: "#/components/schemas/PresetSample"
+        secondary_preset:
+          $ref: "#/components/schemas/PresetSample"
+        primary_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        secondary_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        winner:
+          $ref: "#/components/schemas/Winner"
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: ISO 8601 timestamp, set by the server
+        author_id:
+          type: string
+
+    # ---- Input DTOs ----
+    ChatHistoryCreate:
+      type: object
+      required:
+        - primary_preset
+        - secondary_preset
+        - primary_messages
+        - secondary_messages
+        - winner
+        - author_id
+      properties:
+        primary_preset:
+          $ref: "#/components/schemas/PresetSample"
+        secondary_preset:
+          $ref: "#/components/schemas/PresetSample"
+        primary_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        secondary_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        winner:
+          $ref: "#/components/schemas/Winner"
+        author_id:
+          type: string
+
+    ChatHistoryUpdate:
+      description: >
+        Fields allowed for updating. project_id and author_id are immutable.
+      type: object
+      required:
+        - primary_preset
+        - secondary_preset
+        - primary_messages
+        - secondary_messages
+        - winner
+      properties:
+        primary_preset:
+          $ref: "#/components/schemas/PresetSample"
+        secondary_preset:
+          $ref: "#/components/schemas/PresetSample"
+        primary_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        secondary_messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        winner:
+          $ref: "#/components/schemas/Winner"
