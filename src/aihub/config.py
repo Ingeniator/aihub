@@ -74,14 +74,36 @@ class PostgresConfig:
     user: str
     password: str   # mapped from 'pass' in yaml (reserved keyword)
     pool: PoolConfig = PoolConfig()
+    target_session_attrs: str = "read-write"
+
+    def _parsed_hosts(self) -> tuple[list[str], list[int]]:
+        raw = self.uri if "://" in self.uri else f"postgresql://{self.uri}"
+        netloc = raw.split("://", 1)[1].split("/")[0]
+        hosts, ports = [], []
+        for entry in netloc.split(","):
+            entry = entry.strip()
+            if ":" in entry:
+                h, p = entry.rsplit(":", 1)
+                hosts.append(h)
+                ports.append(int(p))
+            else:
+                hosts.append(entry)
+                ports.append(5432)
+        return hosts, ports
 
     def dsn(self) -> str:
-        from urllib.parse import quote, urlparse
+        from urllib.parse import quote
 
-        raw = self.uri if "://" in self.uri else f"postgresql://{self.uri}"
-        host_part = urlparse(raw).netloc  # preserves comma-separated hosts as-is
         pw = quote(self.password, safe="")
-        return f"postgresql+asyncpg://{self.user}:{pw}@{host_part}/{self.database}"
+        # Hosts are passed via connect_args; SQLAlchemy can't parse comma-separated hosts.
+        return f"postgresql+asyncpg://{self.user}:{pw}@/{self.database}"
+
+    def connect_args(self) -> dict:
+        hosts, ports = self._parsed_hosts()
+        args: dict = {"target_session_attrs": self.target_session_attrs}
+        if len(hosts) == 1:
+            return {**args, "host": hosts[0], "port": ports[0]}
+        return {**args, "host": hosts, "port": ports}
 
 
 @dataclass(frozen=True)
@@ -114,6 +136,7 @@ def load_config(path: str | Path) -> Settings:
             user=pg["user"],
             password=pg["pass"],
             pool=PoolConfig(**pg.get("pool", {})),
+            target_session_attrs=pg.get("target_session_attrs", "any"),
         ),
         server=ServerConfig(**raw.get("server", {})),
     )

@@ -58,6 +58,7 @@ def init_db(settings: Settings) -> None:
     pool = settings.postgres.pool
     _engine = create_async_engine(
         settings.postgres.dsn(),
+        connect_args=settings.postgres.connect_args(),
         pool_pre_ping=True,
         pool_size=pool.size,
         max_overflow=pool.max_overflow,
