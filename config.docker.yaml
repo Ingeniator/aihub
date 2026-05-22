@@ -7,7 +7,7 @@ server:
   debug: false
 
 postgres:
-  uri: "postgresql://postgres:5432"
+  uri: "postgresql://aihub-db:5432"
   database: "aihub"
   user: "aihub"
   pass: "aihub"
